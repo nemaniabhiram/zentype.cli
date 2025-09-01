@@ -262,8 +262,10 @@ func (s *APIServer) serverInfo(w http.ResponseWriter, r *http.Request) {
 func (s *APIServer) githubAuth(w http.ResponseWriter, r *http.Request) {
 	state := fmt.Sprintf("zentype_%d", time.Now().Unix())
 	url := s.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
+
+	log.Printf("DEBUG: Generated GitHub Auth URL: %s", url)
 	
-	w.Header().Set("Content-Type", "application/json")
+w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"auth_url": url,
 		"state":    state,
