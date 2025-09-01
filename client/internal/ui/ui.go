@@ -103,6 +103,13 @@ func (m *Model) restartTest() {
 	m.submitError = ""
 }
 
+// restartCurrentTest resets the current test with the same words
+func (m *Model) restartCurrentTest() {
+	// Keep the same words but reset game state
+	words := m.game.AllWords
+	m.game = game.NewTypingGameWithWords(m.duration, words)
+}
+
 // Init initializes the model and starts the tick command for periodic updates
 func (m Model) Init() tea.Cmd {
 	return tickCmd()
@@ -135,7 +142,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.restartTest()
 				return m, tickCmd()
 			}
-			// Handle Enter for line progression
+			// If game has started and user has typed something, restart current test
+			if m.game.IsStarted && m.game.GlobalPos > 0 {
+				m.restartCurrentTest()
+				return m, tickCmd()
+			}
+			// Handle Enter for line progression if no input yet
 			if m.game.HandleEnterKey() {
 				return m, nil
 			}
