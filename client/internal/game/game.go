@@ -51,6 +51,19 @@ func NewTypingGame(duration int) *TypingGame {
 	return game
 }
 
+// NewTypingGameWithWords initializes a new TypingGame instance with existing words
+func NewTypingGameWithWords(duration int, words []string) *TypingGame {
+	game := &TypingGame{
+		AllWords:     words,
+		Duration:     duration,
+		Errors:       make(map[int]bool),
+		LinesPerView: 3,
+		CharsPerLine: 50,
+	}
+	game.generateDisplayLines()
+	return game
+}
+
 // generateDisplayLines creates the initial display lines based on the words available
 func (g *TypingGame) generateDisplayLines() {
 	lines := make([]string, 0, g.LinesPerView)
