@@ -139,7 +139,6 @@ func runAuth(cmd *cobra.Command, args []string) error {
 	if err := authManager.SetToken(token); err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
-	fmt.Println("💾 Token saved successfully")
 
 	// Get user info to confirm
 	user := authManager.GetUser()

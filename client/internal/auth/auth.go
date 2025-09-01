@@ -118,10 +118,8 @@ func (m *Manager) Logout() error {
 
 // loadSession loads the session from disk
 func (m *Manager) loadSession() error {
-	fmt.Printf("DEBUG: Loading auth from: %s\n", m.configPath)
 	data, err := os.ReadFile(m.configPath)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to read auth file: %v\n", err)
 		return err
 	}
 
@@ -131,7 +129,6 @@ func (m *Manager) loadSession() error {
 	}
 
 	m.session = &session
-	fmt.Printf("DEBUG: Loaded session for user: %s\n", session.Username)
 	return nil
 }
 
@@ -146,7 +143,6 @@ func (m *Manager) saveSession() error {
 		return err
 	}
 
-	fmt.Printf("DEBUG: Saving auth to: %s\n", m.configPath)
 	return os.WriteFile(m.configPath, data, 0600)
 }
 
