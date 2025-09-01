@@ -554,18 +554,29 @@ func (s *APIServer) submitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate current rank
+	// Calculate current rank based on the new score
 	var rank int
 	err = s.db.QueryRow(`
-		SELECT COUNT(*) + 1 
-		FROM (
-			SELECT DISTINCT github_id, MAX(wpm) as best_wpm, MAX(accuracy) as best_accuracy
+		WITH user_best_scores AS (
+			SELECT 
+				github_id,
+				CASE 
+					WHEN github_id = $4 THEN GREATEST(MAX(wpm), $5)
+					ELSE MAX(wpm)
+				END as best_wpm,
+				CASE 
+					WHEN github_id = $4 AND GREATEST(MAX(wpm), $5) = $5 THEN $6
+					WHEN github_id = $4 AND GREATEST(MAX(wpm), $5) > $5 THEN MAX(CASE WHEN wpm = MAX(wpm) THEN accuracy END)
+					ELSE MAX(CASE WHEN wpm = MAX(wpm) THEN accuracy END)
+				END as best_accuracy
 			FROM scores 
 			WHERE accuracy >= $1 AND duration = $2 AND language = $3
 			GROUP BY github_id
-			HAVING MAX(wpm) > $4 OR (MAX(wpm) = $4 AND MAX(accuracy) > $5)
-		) ranked_users`,
-		MinAccuracy, TargetDuration, entry.Language, entry.WPM, entry.Accuracy,
+		)
+		SELECT COUNT(*) + 1
+		FROM user_best_scores
+		WHERE best_wpm > $5 OR (best_wpm = $5 AND best_accuracy > $6)`,
+		MinAccuracy, TargetDuration, entry.Language, githubID, entry.WPM, entry.Accuracy,
 	).Scan(&rank)
 
 	if err != nil {
