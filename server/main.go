@@ -134,7 +134,11 @@ func main() {
 	}
 
 	log.Printf("🌐 Server starting on port %s", port)
-	log.Printf("📝 API Base URL: http://localhost:%s/api", port)
+	apiBaseURL := fmt.Sprintf("http://localhost:%s", port)
+	if railwayDomain := os.Getenv("RAILWAY_PUBLIC_DOMAIN"); railwayDomain != "" {
+		apiBaseURL = "https" + "://" + railwayDomain
+	}
+	log.Printf("📝 API Base URL: %s/api", apiBaseURL)
 	log.Printf("🔐 OAuth Redirect: %s", oauthConfig.RedirectURL)
 	log.Printf("🎯 Leaderboard Rules: %ds tests, %.0f%% min accuracy", TargetDuration, MinAccuracy)
 	log.Println("✨ Ready to serve ZenType clients!")
@@ -145,10 +149,16 @@ func main() {
 }
 
 func getRedirectURL() string {
+	// Use GITHUB_REDIRECT_URL if explicitly set
 	if url := os.Getenv("GITHUB_REDIRECT_URL"); url != "" {
 		return url
 	}
-	
+
+	// Use Railway's public domain if available
+	if railwayDomain := os.Getenv("RAILWAY_PUBLIC_DOMAIN"); railwayDomain != "" {
+		return fmt.Sprintf("https://%s/api/auth/github/callback", railwayDomain)
+	}
+
 	// Default for local development
 	port := os.Getenv("PORT")
 	if port == "" {
