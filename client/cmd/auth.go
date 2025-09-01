@@ -108,19 +108,19 @@ func runAuth(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get auth URL
-	authURL, err := client.GetAuthURL()
+	authData, err := client.GetAuthURL()
 	if err != nil {
 		return fmt.Errorf("failed to get authentication URL: %w", err)
 	}
 
 	fmt.Println("📱 Opening GitHub OAuth in your browser...")
-	fmt.Printf("URL: %s\n", authURL)
-	fmt.Println()
+	fmt.Println("If the browser doesn't open automatically, copy this URL:")
+	fmt.Printf("\n%s\n\n", authData.AuthURL)
 
 	// Try to open browser
-	if err := openBrowser(authURL); err != nil {
+	if err := openBrowser(authData.AuthURL); err != nil {
 		fmt.Printf("⚠ Could not open browser automatically: %v\n", err)
-		fmt.Println("Please open the URL above manually in your browser")
+		fmt.Println("Please copy and paste the full URL above into your browser")
 	}
 
 	fmt.Println("👀 Complete the authentication in your browser")
@@ -135,9 +135,11 @@ func runAuth(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set the token
+	fmt.Println("🔄 Verifying token with server...")
 	if err := authManager.SetToken(token); err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
+	fmt.Println("💾 Token saved successfully")
 
 	// Get user info to confirm
 	user := authManager.GetUser()
@@ -159,13 +161,14 @@ func openBrowser(url string) error {
 	switch runtime.GOOS {
 	case "windows":
 		cmd = "cmd"
-		args = []string{"/c", "start"}
+		args = []string{"/c", "start", "", url}
 	case "darwin":
 		cmd = "open"
+		args = []string{url}
 	default: // Linux and others
 		cmd = "xdg-open"
+		args = []string{url}
 	}
-	args = append(args, url)
 
 	return exec.Command(cmd, args...).Start()
 }

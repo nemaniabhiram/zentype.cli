@@ -12,7 +12,7 @@ import (
 
 const (
 	// Default API base URL - can be overridden via environment variable
-	DefaultBaseURL = "https://zentype-api.railway.app/api"
+	DefaultBaseURL = "https://zentypecli-production.up.railway.app/api"
 	Timeout        = 15 * time.Second
 )
 
@@ -47,6 +47,12 @@ type AuthUser struct {
 	GitHubID int    `json:"github_id"`
 	Login    string `json:"github_login"`
 	Avatar   string `json:"avatar_url"`
+}
+
+// AuthData contains the URL for the user to visit to authenticate.
+type AuthData struct {
+	AuthURL string `json:"auth_url"`
+	State   string `json:"state"`
 }
 
 // Client handles API communication
@@ -137,27 +143,29 @@ func (c *Client) CheckHealth() error {
 }
 
 // GetAuthURL gets the GitHub OAuth authentication URL
-func (c *Client) GetAuthURL() (string, error) {
-	resp, err := c.httpClient.Get(c.baseURL + "/auth/github")
+func (c *Client) GetAuthURL() (*AuthData, error) {
+	req, err := http.NewRequest("GET", c.baseURL+"/auth/github", nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to get auth URL: %w", err)
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auth URL: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to get auth URL, status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to get auth URL, status: %d", resp.StatusCode)
 	}
 
-	var result struct {
-		AuthURL string `json:"auth_url"`
-		State   string `json:"state"`
-	}
-
+	var result AuthData
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode auth response: %w", err)
+		return nil, fmt.Errorf("failed to decode auth response: %w", err)
 	}
 
-	return result.AuthURL, nil
+	return &result, nil
 }
 
 // VerifyToken verifies the authentication token and returns user info
