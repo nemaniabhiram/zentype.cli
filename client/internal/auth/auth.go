@@ -46,11 +46,14 @@ func NewManager(client *api.Client) (*Manager, error) {
 
 	// Try to load existing session
 	if err := manager.loadSession(); err == nil {
+		// Set the token first so we can verify it
+		client.SetToken(manager.session.Token)
 		// Verify the session is still valid
 		if manager.isSessionValid() {
-			client.SetToken(manager.session.Token)
+			// Token is valid, keep it
 		} else {
 			// Session expired, remove it
+			client.SetToken("")
 			manager.clearSession()
 		}
 	}
@@ -99,7 +102,11 @@ func (m *Manager) SetToken(token string) error {
 
 // GetAuthURL returns the GitHub OAuth URL for authentication
 func (m *Manager) GetAuthURL() (string, error) {
-	return m.client.GetAuthURL()
+	authData, err := m.client.GetAuthURL()
+	if err != nil {
+		return "", err
+	}
+	return authData.AuthURL, nil
 }
 
 // Logout clears the current session
@@ -111,8 +118,10 @@ func (m *Manager) Logout() error {
 
 // loadSession loads the session from disk
 func (m *Manager) loadSession() error {
+	fmt.Printf("DEBUG: Loading auth from: %s\n", m.configPath)
 	data, err := os.ReadFile(m.configPath)
 	if err != nil {
+		fmt.Printf("DEBUG: Failed to read auth file: %v\n", err)
 		return err
 	}
 
@@ -122,6 +131,7 @@ func (m *Manager) loadSession() error {
 	}
 
 	m.session = &session
+	fmt.Printf("DEBUG: Loaded session for user: %s\n", session.Username)
 	return nil
 }
 
@@ -136,6 +146,7 @@ func (m *Manager) saveSession() error {
 		return err
 	}
 
+	fmt.Printf("DEBUG: Saving auth to: %s\n", m.configPath)
 	return os.WriteFile(m.configPath, data, 0600)
 }
 
