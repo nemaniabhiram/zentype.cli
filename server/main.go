@@ -602,20 +602,35 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	// Get top 10 users (best score per user, ties broken by accuracy)
 	query := `
+		WITH user_best AS (
+			SELECT 
+				username,
+				github_id,
+				MAX(wpm) as best_wpm
+			FROM scores 
+			WHERE accuracy >= $1 AND duration = $2 AND language = $3
+			GROUP BY username, github_id
+		),
+		user_details AS (
+			SELECT DISTINCT ON (s.username, s.github_id)
+				s.username,
+				s.github_id,
+				ub.best_wpm,
+				s.accuracy as best_accuracy,
+				s.created_at as score_date
+			FROM scores s
+			JOIN user_best ub ON s.username = ub.username AND s.github_id = ub.github_id AND s.wpm = ub.best_wpm
+			WHERE s.accuracy >= $1 AND s.duration = $2 AND s.language = $3
+			ORDER BY s.username, s.github_id, s.accuracy DESC, s.created_at ASC
+		)
 		SELECT 
 			username,
 			github_id,
-			MAX(wpm) as best_wpm,
-			MAX(CASE WHEN wpm = MAX(wpm) THEN accuracy END) as best_accuracy,
-			MAX(CASE WHEN wpm = MAX(wpm) THEN created_at END) as score_date,
-			ROW_NUMBER() OVER (
-				ORDER BY MAX(wpm) DESC, 
-				MAX(CASE WHEN wpm = MAX(wpm) THEN accuracy END) DESC,
-				MAX(CASE WHEN wpm = MAX(wpm) THEN created_at END) ASC
-			) as rank
-		FROM scores 
-		WHERE accuracy >= $1 AND duration = $2 AND language = $3
-		GROUP BY username, github_id
+			best_wpm,
+			best_accuracy,
+			score_date,
+			ROW_NUMBER() OVER (ORDER BY best_wpm DESC, best_accuracy DESC, score_date ASC) as rank
+		FROM user_details
 		ORDER BY rank
 		LIMIT 10`
 
