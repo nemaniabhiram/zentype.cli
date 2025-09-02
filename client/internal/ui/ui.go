@@ -142,8 +142,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.restartTest()
 				return m, tickCmd()
 			}
-			// If game has started and user has typed something, restart current test
-			if m.game.IsStarted && m.game.GlobalPos > 0 {
+			// If game has started, restart current test
+			if m.game.IsStarted {
 				m.restartCurrentTest()
 				return m, tickCmd()
 			}
