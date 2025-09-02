@@ -619,6 +619,14 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 		language = "english"
 	}
 
+	// Get requesting user's GitHub ID to exclude them
+	var requestingUserID int
+	token := r.Header.Get("Authorization")
+	if token != "" {
+		token = strings.TrimPrefix(token, "Bearer ")
+		s.db.QueryRow(`SELECT github_id FROM users WHERE access_token = $1`, token).Scan(&requestingUserID)
+	}
+
 	// Get top 10 users (best score per user, ties broken by accuracy)
 	query := `
 		WITH user_best AS (
@@ -627,7 +635,7 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 				github_id,
 				MAX(wpm) as best_wpm
 			FROM scores 
-			WHERE accuracy >= $1 AND duration = $2 AND language = $3
+			WHERE accuracy >= $1 AND duration = $2 AND language = $3 AND github_id != $4
 			GROUP BY username, github_id
 		),
 		user_details AS (
@@ -639,7 +647,7 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 				s.created_at as score_date
 			FROM scores s
 			JOIN user_best ub ON s.username = ub.username AND s.github_id = ub.github_id AND s.wpm = ub.best_wpm
-			WHERE s.accuracy >= $1 AND s.duration = $2 AND s.language = $3
+			WHERE s.accuracy >= $1 AND s.duration = $2 AND s.language = $3 AND s.github_id != $4
 			ORDER BY s.username, s.github_id, s.accuracy DESC, s.created_at ASC
 		)
 		SELECT 
@@ -653,7 +661,7 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 		ORDER BY rank
 		LIMIT 10`
 
-	rows, err := s.db.Query(query, MinAccuracy, TargetDuration, language)
+	rows, err := s.db.Query(query, MinAccuracy, TargetDuration, language, requestingUserID)
 	if err != nil {
 		log.Printf("Error getting leaderboard: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -682,17 +690,14 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {
-	log.Printf("DEBUG: getUserRank called")
 	// Verify authentication
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		log.Printf("DEBUG: No authorization header")
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
 	}
 
 	token = strings.TrimPrefix(token, "Bearer ")
-	log.Printf("DEBUG: Token received (first 10 chars): %s...", token[:min(10, len(token))])
 
 	var githubID int
 	var username string
@@ -702,18 +707,14 @@ func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {
 	).Scan(&githubID, &username)
 
 	if err != nil {
-		log.Printf("DEBUG: Token validation failed: %v", err)
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
-
-	log.Printf("DEBUG: User authenticated - ID: %d, Username: %s", githubID, username)
 
 	language := r.URL.Query().Get("language")
 	if language == "" {
 		language = "english"
 	}
-	log.Printf("DEBUG: Language: %s", language)
 
 	// Get user's best score and rank
 	var userStats UserStats
@@ -721,7 +722,6 @@ func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {
 	userStats.GitHubID = githubID
 
 	// Get user's best score - simplified query
-	log.Printf("DEBUG: Querying user stats for githubID=%d, duration=%d, language=%s", githubID, TargetDuration, language)
 	err = s.db.QueryRow(`
 		SELECT 
 			COALESCE(MAX(wpm), 0) as best_wpm,
@@ -743,24 +743,17 @@ func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {
 			githubID, TargetDuration, language, userStats.BestWPM,
 		).Scan(&userStats.BestAccuracy)
 		if err2 != nil {
-			log.Printf("DEBUG: Error getting best accuracy: %v", err2)
 			userStats.BestAccuracy = 0
 		}
 	}
 
 	if err != nil && err != sql.ErrNoRows {
-		log.Printf("DEBUG: Error getting user stats: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-	
-	log.Printf("DEBUG: User stats - BestWPM: %.1f, BestAccuracy: %.1f, TotalScores: %d, QualifiedScores: %d", 
-		userStats.BestWPM, userStats.BestAccuracy, userStats.TotalScores, userStats.QualifiedScores)
 
 	// Calculate rank only if user has qualifying scores
 	if userStats.QualifiedScores > 0 && userStats.BestWPM > 0 {
-		log.Printf("DEBUG: Calculating rank for qualified user")
-		
 		// Simple rank calculation: count users with better scores
 		err = s.db.QueryRow(`
 			WITH user_best AS (
@@ -779,18 +772,11 @@ func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {
 		).Scan(&userStats.Rank)
 
 		if err != nil {
-			log.Printf("DEBUG: Error calculating user rank: %v", err)
 			userStats.Rank = 0
-		} else {
-			log.Printf("DEBUG: Calculated rank: %d", userStats.Rank)
 		}
 	} else {
-		log.Printf("DEBUG: User not qualified for leaderboard (QualifiedScores: %d, BestWPM: %.1f)", 
-			userStats.QualifiedScores, userStats.BestWPM)
 		userStats.Rank = 0 // Not qualified for leaderboard
 	}
-
-	log.Printf("DEBUG: Returning user stats: %+v", userStats)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(userStats)
 }
