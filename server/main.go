@@ -53,6 +53,14 @@ const (
 	TargetDuration = 60   // Only 60-second tests count
 )
 
+// min returns the smaller of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func main() {
 	log.Println("🚀 Starting ZenType API Server...")
 
@@ -674,14 +682,17 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {
+	log.Printf("DEBUG: getUserRank called")
 	// Verify authentication
 	token := r.Header.Get("Authorization")
 	if token == "" {
+		log.Printf("DEBUG: No authorization header")
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
 	}
 
 	token = strings.TrimPrefix(token, "Bearer ")
+	log.Printf("DEBUG: Token received (first 10 chars): %s...", token[:min(10, len(token))])
 
 	var githubID int
 	var username string
@@ -691,41 +702,64 @@ func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {
 	).Scan(&githubID, &username)
 
 	if err != nil {
+		log.Printf("DEBUG: Token validation failed: %v", err)
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
+
+	log.Printf("DEBUG: User authenticated - ID: %d, Username: %s", githubID, username)
 
 	language := r.URL.Query().Get("language")
 	if language == "" {
 		language = "english"
 	}
+	log.Printf("DEBUG: Language: %s", language)
 
 	// Get user's best score and rank
 	var userStats UserStats
 	userStats.Username = username
 	userStats.GitHubID = githubID
 
-	// Get user's best score
+	// Get user's best score - simplified query
+	log.Printf("DEBUG: Querying user stats for githubID=%d, duration=%d, language=%s", githubID, TargetDuration, language)
 	err = s.db.QueryRow(`
 		SELECT 
 			COALESCE(MAX(wpm), 0) as best_wpm,
-			COALESCE(MAX(CASE WHEN wpm = MAX(wpm) THEN accuracy END), 0) as best_accuracy,
 			COUNT(*) as total_scores,
 			COUNT(CASE WHEN accuracy >= $1 THEN 1 END) as qualified_scores
 		FROM scores 
-		WHERE github_id = $2 AND duration = $3 AND language = $4
-		GROUP BY github_id`,
+		WHERE github_id = $2 AND duration = $3 AND language = $4`,
 		MinAccuracy, githubID, TargetDuration, language,
-	).Scan(&userStats.BestWPM, &userStats.BestAccuracy, &userStats.TotalScores, &userStats.QualifiedScores)
+	).Scan(&userStats.BestWPM, &userStats.TotalScores, &userStats.QualifiedScores)
+	
+	// Get best accuracy for the best WPM score
+	if userStats.BestWPM > 0 {
+		err2 := s.db.QueryRow(`
+			SELECT accuracy 
+			FROM scores 
+			WHERE github_id = $1 AND duration = $2 AND language = $3 AND wpm = $4
+			ORDER BY accuracy DESC, created_at ASC
+			LIMIT 1`,
+			githubID, TargetDuration, language, userStats.BestWPM,
+		).Scan(&userStats.BestAccuracy)
+		if err2 != nil {
+			log.Printf("DEBUG: Error getting best accuracy: %v", err2)
+			userStats.BestAccuracy = 0
+		}
+	}
 
 	if err != nil && err != sql.ErrNoRows {
-		log.Printf("Error getting user stats: %v", err)
+		log.Printf("DEBUG: Error getting user stats: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
+	
+	log.Printf("DEBUG: User stats - BestWPM: %.1f, BestAccuracy: %.1f, TotalScores: %d, QualifiedScores: %d", 
+		userStats.BestWPM, userStats.BestAccuracy, userStats.TotalScores, userStats.QualifiedScores)
 
 	// Calculate rank only if user has qualifying scores
 	if userStats.QualifiedScores > 0 && userStats.BestWPM > 0 {
+		log.Printf("DEBUG: Calculating rank for qualified user")
 		err = s.db.QueryRow(`
 			SELECT COUNT(*) + 1 
 			FROM (
@@ -739,13 +773,18 @@ func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {
 		).Scan(&userStats.Rank)
 
 		if err != nil {
-			log.Printf("Error calculating user rank: %v", err)
+			log.Printf("DEBUG: Error calculating user rank: %v", err)
 			userStats.Rank = 0
+		} else {
+			log.Printf("DEBUG: Calculated rank: %d", userStats.Rank)
 		}
 	} else {
+		log.Printf("DEBUG: User not qualified for leaderboard (QualifiedScores: %d, BestWPM: %.1f)", 
+			userStats.QualifiedScores, userStats.BestWPM)
 		userStats.Rank = 0 // Not qualified for leaderboard
 	}
 
+	log.Printf("DEBUG: Returning user stats: %+v", userStats)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(userStats)
 }
