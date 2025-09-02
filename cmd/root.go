@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"zentype/internal/ui"
+	"github.com/nemaniabhiram/zentype.cli/internal/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"

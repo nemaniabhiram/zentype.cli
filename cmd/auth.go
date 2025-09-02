@@ -5,8 +5,8 @@ import (
 	"os/exec"
 	"runtime"
 
-	"zentype/internal/api"
-	"zentype/internal/auth"
+	"github.com/nemaniabhiram/zentype.cli/internal/api"
+	"github.com/nemaniabhiram/zentype.cli/internal/auth"
 
 	"github.com/spf13/cobra"
 )

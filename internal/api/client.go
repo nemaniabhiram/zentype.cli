@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 	"time"
-	"zentype/internal/game"
+	"github.com/nemaniabhiram/zentype.cli/internal/game"
 )
 
 const (
