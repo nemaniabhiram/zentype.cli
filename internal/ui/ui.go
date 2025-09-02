@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -190,12 +189,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				
 				// Submit score if authenticated and 60-second test
 				if m.authManager.IsAuthenticated() && m.duration == 60 && !m.submitting {
-					log.Printf("DEBUG: User authenticated, submitting score for 60s test")
 					m.submitting = true
 					return m, m.submitScore()
-				} else {
-					log.Printf("DEBUG: Not submitting score - authenticated: %v, duration: %d, submitting: %v", 
-						m.authManager.IsAuthenticated(), m.duration, m.submitting)
 				}
 				
 				return m, nil
@@ -207,22 +202,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle score submission results
 	case scoreSubmittedMsg:
         m.submitting = false
-        log.Printf("DEBUG: Score submitted, entry: %+v", msg.entry)
         if msg.entry != nil {
             m.userRank = msg.entry.Rank
-            log.Printf("DEBUG: Set userRank from entry: %d", m.userRank)
         }
         if m.userRank == 0 {
-            log.Printf("DEBUG: userRank is 0, fetching rank...")
             return m, m.getRankCmd()
         }
         return m, nil
 
 	case userRankMsg:
-        log.Printf("DEBUG: Received userRankMsg with rank: %d", msg.rank)
         if msg.rank > 0 {
             m.userRank = msg.rank
-            log.Printf("DEBUG: Updated userRank to: %d", m.userRank)
         }
         return m, nil
 
@@ -411,20 +401,18 @@ func (m Model) renderResults() string {
 				lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("error"),
 			)
 		} else if !m.authManager.IsAuthenticated() {
-			log.Printf("DEBUG: User not authenticated, showing n/a")
 			rankSection = lipgloss.JoinVertical(
 				lipgloss.Right,
 				mutedStyle.Render("rank"),
 				mutedStyle.Render("n/a"),
 			)
 		} else if m.userRank == 0 {
-            log.Printf("DEBUG: userRank is 0, showing n/a")
             rankSection = lipgloss.JoinVertical(
                 lipgloss.Right,
                 mutedStyle.Render("rank"),
                 mutedStyle.Render("n/a"),
             )
-        } else if stats.Accuracy < 85.0 {
+        } else if m.finalStats.Accuracy < 85.0 {
 			rankSection = lipgloss.JoinVertical(
 				lipgloss.Right,
 				mutedStyle.Render("rank"),
@@ -482,12 +470,8 @@ func (m Model) renderResults() string {
 // getRankCmd fetches the user's rank from the server
 func (m Model) getRankCmd() tea.Cmd {
     return func() tea.Msg {
-        log.Printf("DEBUG: Fetching user rank for language: %s", m.language)
         if stats, err := m.client.GetUserRank(m.language); err == nil {
-            log.Printf("DEBUG: GetUserRank success, rank: %d", stats.Rank)
             return userRankMsg{rank: stats.Rank}
-        } else {
-            log.Printf("DEBUG: GetUserRank error: %v", err)
         }
         return userRankMsg{rank: 0}
     }
@@ -496,22 +480,16 @@ func (m Model) getRankCmd() tea.Cmd {
 // submitScore submits the user's score to the leaderboard
 func (m Model) submitScore() tea.Cmd {
     return func() tea.Msg {
-        log.Printf("DEBUG: Submitting score - WPM: %.1f, Accuracy: %.1f, Duration: %d", m.finalStats.WPM, m.finalStats.Accuracy, m.duration)
         entry, err := m.client.SubmitScore(m.finalStats, m.duration, m.language)
         if err != nil {
-            log.Printf("DEBUG: SubmitScore error: %v", err)
             return submitErrorMsg{error: err.Error()}
         }
-        log.Printf("DEBUG: SubmitScore success, entry: %+v", entry)
         // Always refresh rank after submission (server may calculate asynchronously)
         if stats, err := m.client.GetUserRank(m.language); err == nil {
-            log.Printf("DEBUG: GetUserRank in submitScore success, rank: %d", stats.Rank)
             if entry == nil {
                 entry = &api.LeaderboardEntry{}
             }
             entry.Rank = stats.Rank
-        } else {
-            log.Printf("DEBUG: GetUserRank in submitScore error: %v", err)
         }
         return scoreSubmittedMsg{entry: entry}
     }
