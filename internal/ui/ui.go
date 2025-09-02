@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"zentype/internal/game"
-	"zentype/internal/api"
-	"zentype/internal/auth"
+	"github.com/nemaniabhiram/zentype.cli/internal/game"
+	"github.com/nemaniabhiram/zentype.cli/internal/api"
+	"github.com/nemaniabhiram/zentype.cli/internal/auth"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

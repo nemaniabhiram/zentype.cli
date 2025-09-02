@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"zentype/internal/ui"
+	"github.com/nemaniabhiram/zentype.cli/internal/api"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -28,7 +28,7 @@ To compete on the leaderboard, you need to:
 
 func runLeaderboard(cmd *cobra.Command, args []string) error {
 	// Create leaderboard model
-	model := ui.NewLeaderboardModel()
+	model := api.NewLeaderboardModel()
 
 	// Start the TUI program
 	p := tea.NewProgram(model, tea.WithAltScreen())

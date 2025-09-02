@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"zentype/internal/api"
-	"zentype/internal/auth"
+	"github.com/nemaniabhiram/zentype.cli/internal/api"
+	"github.com/nemaniabhiram/zentype.cli/internal/auth"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
