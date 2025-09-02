@@ -25,9 +25,8 @@ zt
 # Custom duration
 zt --time 30
 
-# Subcommands
-zt start            # interactive typing test
-zt leaderboard      # view global leaderboard
+# Other commands
+zt --leaderboard    # view global leaderboard
 zt auth             # authenticate with GitHub
 zt version          # print version
 ```
@@ -36,8 +35,8 @@ zt version          # print version
 
 | Command | Description |
 |---------|-------------|
-| `zt` | Start a typing test (alias for `zt start`). |
-| `zt start [-t, --time]` | Run a typing test with custom duration (10-300 s). |
+| `zt` | Start a typing test (60-second default). |
+| `zt --time <seconds>` | Run a typing test with custom duration (10-300 s). |
 | `zt leaderboard` | Show top scores and your rank. |
 | `zt auth [--logout|--status]` | Authenticate with GitHub, logout, or view status. |
 | `zt version` | Print the current version. |
