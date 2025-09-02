@@ -35,11 +35,18 @@ zt version          # print version
 
 | Command | Description |
 |---------|-------------|
-| `zt` | Start a typing test (60-second default). |
-| `zt --time <seconds>` | Run a typing test with custom duration (10-300 s). |
-| `zt leaderboard` | Show top scores and your rank. |
-| `zt auth [--logout|--status]` | Authenticate with GitHub, logout, or view status. |
-| `zt version` | Print the current version. |
+| `zt` | Start a 60-second typing test |
+| `zt --time <seconds>` | Custom duration test (10-300 s) |
+| `zt --leaderboard` | Show global leaderboard / your rank |
+| `zt auth [--logout|--status]` | Authenticate with GitHub, logout, or show status |
+| `zt version` | Print the current version |
+
+## Keybindings (during test)
+
+| Key | Action |
+|-----|--------|
+| `Esc` / `Ctrl+C` | Quit application |
+| `Enter` | Restart test |
 
 ## Contributing
 
