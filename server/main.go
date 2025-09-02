@@ -760,15 +760,21 @@ func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {
 	// Calculate rank only if user has qualifying scores
 	if userStats.QualifiedScores > 0 && userStats.BestWPM > 0 {
 		log.Printf("DEBUG: Calculating rank for qualified user")
+		
+		// Simple rank calculation: count users with better scores
 		err = s.db.QueryRow(`
-			SELECT COUNT(*) + 1 
-			FROM (
-				SELECT DISTINCT github_id
+			WITH user_best AS (
+				SELECT 
+					github_id,
+					MAX(wpm) as best_wpm,
+					MAX(accuracy) as best_accuracy
 				FROM scores 
 				WHERE accuracy >= $1 AND duration = $2 AND language = $3
 				GROUP BY github_id
-				HAVING MAX(wpm) > $4 OR (MAX(wpm) = $4 AND MAX(CASE WHEN wpm = MAX(wpm) THEN accuracy END) > $5)
-			) ranked_users`,
+			)
+			SELECT COUNT(*) + 1
+			FROM user_best
+			WHERE best_wpm > $4 OR (best_wpm = $4 AND best_accuracy > $5)`,
 			MinAccuracy, TargetDuration, language, userStats.BestWPM, userStats.BestAccuracy,
 		).Scan(&userStats.Rank)
 
