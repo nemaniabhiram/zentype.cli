@@ -4,7 +4,7 @@ A minimal terminal-based typing speed test. Measure words-per-minute (WPM) and a
 
 ## Installation
 
-Requires Go 1.21+.
+Requires Go 1.21+. [Install Go](https://go.dev/dl/).
 
 ```bash
 # Install latest released commit
@@ -57,7 +57,3 @@ go run ./zt --time 45
 # Tidy dependencies
 go mod tidy
 ```
-
-## License
-
-MIT License — see `LICENSE` for details.
