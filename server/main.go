@@ -738,7 +738,7 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 				
 				var entry LeaderboardEntry
 				err = s.db.QueryRow(userQuery, MinAccuracy, TargetDuration, language, githubID).Scan(
-					&entry.Username, &entry.GitHubID, &entry.WPM, &entry.Accuracy, &entry.Date, &entry.Rank)
+					&entry.Username, &entry.GitHubID, &entry.WPM, &entry.Accuracy, &entry.CreatedAt, &entry.Rank)
 				if err == nil {
 					userEntry = &entry
 				}
