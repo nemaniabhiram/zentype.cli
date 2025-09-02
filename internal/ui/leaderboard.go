@@ -70,9 +70,6 @@ func (m LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = true
 			m.error = ""
 			return m, m.loadLeaderboard()
-		case "a":
-			// Show authentication info/help
-			return m, m.showAuthHelp()
 		}
 		return m, nil
 
@@ -278,7 +275,7 @@ func (m LeaderboardModel) renderInstructions() string {
 	}
 
 	instructions = append(instructions, "")
-	instructions = append(instructions, mutedStyle.Render("Press 'r' to refresh • 'a' for auth help • 'q' to quit"))
+	instructions = append(instructions, mutedStyle.Render("Press 'r' to refresh • 'q' to quit"))
 
 	return lipgloss.JoinVertical(lipgloss.Center, instructions...)
 }
@@ -330,11 +327,3 @@ func (m LeaderboardModel) loadLeaderboard() tea.Cmd {
 }
 
 
-// showAuthHelp shows authentication help
-func (m LeaderboardModel) showAuthHelp() tea.Cmd {
-	return func() tea.Msg {
-		// This could open a help screen or show auth instructions
-		// For now, just return nil to keep it simple
-		return nil
-	}
-}
