@@ -64,7 +64,7 @@ func (m LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc", "q":
-			return m, tea.Sequence(tea.ClearScreen, tea.Quit)
+			return m, tea.Quit
 		case "r", "f5":
 			// Refresh leaderboard
 			m.loading = true
@@ -103,10 +103,12 @@ func (m LeaderboardModel) View() string {
 
 	// Header
 	header := m.renderHeader()
+	header = lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(header)
 	sections = append(sections, header)
 
 	// Leaderboard table
 	table := m.renderLeaderboardTable()
+	table = lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(table)
 	sections = append(sections, table)
 
 
@@ -275,15 +277,17 @@ func (m LeaderboardModel) renderInstructions() string {
 	}
 
 	instructions = append(instructions, "")
-	instructions = append(instructions, mutedStyle.Copy().Align(lipgloss.Center).Render("Press 'r' to refresh • 'q' to quit"))
+	instructions = append(instructions, mutedStyle.Render("Press 'r' to refresh • 'q' to quit"))
 
-	return lipgloss.JoinVertical(lipgloss.Center, instructions...)
+    // Center the instructions across the full terminal width
+    return lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(
+        lipgloss.JoinVertical(lipgloss.Center, instructions...),
+    )
 }
 
 func (m LeaderboardModel) renderLoading() string {
 	spinner := "⣾⣽⣻⢿⡿⣟⣯⣷"
 	frame := int(time.Now().UnixMilli()/100) % len(spinner)
-	
 	content := lipgloss.JoinVertical(
 		lipgloss.Center,
 		lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Render(string(spinner[frame])+" Loading leaderboard..."),

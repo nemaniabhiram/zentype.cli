@@ -31,7 +31,7 @@ func runLeaderboard(cmd *cobra.Command, args []string) error {
 	model := ui.NewLeaderboardModel()
 
 	// Start the TUI program
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model)
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("error running leaderboard: %w", err)
 	}

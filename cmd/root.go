@@ -57,7 +57,7 @@ var versionCmd = &cobra.Command{
 // runLeaderboardFlag shows the leaderboard and exits
 func runLeaderboardFlag() error {
 	model := ui.NewLeaderboardModel()
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model)
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("error running leaderboard: %w", err)
 	}
