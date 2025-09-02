@@ -38,7 +38,7 @@ zt version          # print version
 | `zt` | Start a 60-second typing test |
 | `zt --time <seconds>` | Custom duration test (10-300 s) |
 | `zt --leaderboard` | Show global leaderboard / your rank |
-| `zt auth [--logout|--status]` | Authenticate with GitHub, logout, or show status |
+| `zt auth [--logout / --status]` | Authenticate with GitHub, logout, or show status |
 | `zt version` | Print the current version |
 
 ## Keybindings (during test)
