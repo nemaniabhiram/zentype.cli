@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"zentype/internal/api"
+	"github.com/nemaniabhiram/zentype.cli/internal/api"
 )
 
 // Session represents a user authentication session
