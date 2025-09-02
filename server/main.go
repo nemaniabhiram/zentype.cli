@@ -619,17 +619,6 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 		language = "english"
 	}
 
-	// Get requesting user's GitHub ID to exclude them
-	var requestingUserID int = -1 // Default to -1 so it doesn't match any real GitHub ID
-	token := r.Header.Get("Authorization")
-	if token != "" {
-		token = strings.TrimPrefix(token, "Bearer ")
-		err := s.db.QueryRow(`SELECT github_id FROM users WHERE access_token = $1`, token).Scan(&requestingUserID)
-		if err != nil {
-			requestingUserID = -1 // Keep default if token lookup fails
-		}
-	}
-
 	// Get top 10 users (best score per user, ties broken by accuracy)
 	query := `
 		WITH user_best AS (
@@ -638,7 +627,7 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 				github_id,
 				MAX(wpm) as best_wpm
 			FROM scores 
-			WHERE accuracy >= $1 AND duration = $2 AND language = $3 AND github_id != $4
+			WHERE accuracy >= $1 AND duration = $2 AND language = $3
 			GROUP BY username, github_id
 		),
 		user_details AS (
@@ -650,7 +639,7 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 				s.created_at as score_date
 			FROM scores s
 			JOIN user_best ub ON s.username = ub.username AND s.github_id = ub.github_id AND s.wpm = ub.best_wpm
-			WHERE s.accuracy >= $1 AND s.duration = $2 AND s.language = $3 AND s.github_id != $4
+			WHERE s.accuracy >= $1 AND s.duration = $2 AND s.language = $3
 			ORDER BY s.username, s.github_id, s.accuracy DESC, s.created_at ASC
 		)
 		SELECT 
@@ -664,7 +653,7 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 		ORDER BY rank
 		LIMIT 10`
 
-	rows, err := s.db.Query(query, MinAccuracy, TargetDuration, language, requestingUserID)
+	rows, err := s.db.Query(query, MinAccuracy, TargetDuration, language)
 	if err != nil {
 		log.Printf("Error getting leaderboard: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -688,8 +677,85 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, entry)
 	}
 
+	// If user is authenticated and not in top 10, get their entry separately
+	var userEntry *LeaderboardEntry
+	token := r.Header.Get("Authorization")
+	if token != "" {
+		token = strings.TrimPrefix(token, "Bearer ")
+		var githubID int
+		err := s.db.QueryRow(`SELECT github_id FROM users WHERE access_token = $1`, token).Scan(&githubID)
+		if err == nil {
+			// Check if user is already in top 10
+			userInTop10 := false
+			for _, entry := range entries {
+				if entry.GitHubID == githubID {
+					userInTop10 = true
+					break
+				}
+			}
+			
+			// If not in top 10, get user's entry
+			if !userInTop10 {
+				userQuery := `
+					WITH user_best AS (
+						SELECT 
+							username,
+							github_id,
+							MAX(wpm) as best_wpm
+						FROM scores 
+						WHERE accuracy >= $1 AND duration = $2 AND language = $3 AND github_id = $4
+						GROUP BY username, github_id
+					),
+					user_details AS (
+						SELECT DISTINCT ON (s.username, s.github_id)
+							s.username,
+							s.github_id,
+							ub.best_wpm,
+							s.accuracy as best_accuracy,
+							s.created_at as score_date
+						FROM scores s
+						JOIN user_best ub ON s.username = ub.username AND s.github_id = ub.github_id AND s.wpm = ub.best_wpm
+						WHERE s.accuracy >= $1 AND s.duration = $2 AND s.language = $3 AND s.github_id = $4
+						ORDER BY s.username, s.github_id, s.accuracy DESC, s.created_at ASC
+					),
+					all_users AS (
+						SELECT 
+							username,
+							github_id,
+							MAX(wpm) as best_wpm
+						FROM scores 
+						WHERE accuracy >= $1 AND duration = $2 AND language = $3
+						GROUP BY username, github_id
+					)
+					SELECT 
+						ud.username,
+						ud.github_id,
+						ud.best_wpm,
+						ud.best_accuracy,
+						ud.score_date,
+						(SELECT COUNT(*) + 1 FROM all_users au WHERE au.best_wpm > ud.best_wpm) as rank
+					FROM user_details ud`
+				
+				var entry LeaderboardEntry
+				err = s.db.QueryRow(userQuery, MinAccuracy, TargetDuration, language, githubID).Scan(
+					&entry.Username, &entry.GitHubID, &entry.WPM, &entry.Accuracy, &entry.Date, &entry.Rank)
+				if err == nil {
+					userEntry = &entry
+				}
+			}
+		}
+	}
+
+	response := struct {
+		Entries   []LeaderboardEntry  `json:"entries"`
+		UserEntry *LeaderboardEntry   `json:"user_entry,omitempty"`
+	}{
+		Entries:   entries,
+		UserEntry: userEntry,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(entries)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (s *APIServer) getUserRank(w http.ResponseWriter, r *http.Request) {

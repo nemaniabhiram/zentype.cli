@@ -18,7 +18,7 @@ type LeaderboardModel struct {
 	client      *api.Client
 	authManager *auth.Manager
 	entries     []api.LeaderboardEntry
-	userStats   *api.UserStats
+	userEntry   *api.LeaderboardEntry
 	loading     bool
 	error       string
 	language    string
@@ -26,12 +26,10 @@ type LeaderboardModel struct {
 
 // Message types for async operations
 type leaderboardLoadedMsg struct {
-	entries []api.LeaderboardEntry
+	entries   []api.LeaderboardEntry
+	userEntry *api.LeaderboardEntry
 }
 
-type userStatsLoadedMsg struct {
-	stats *api.UserStats
-}
 
 type loadErrorMsg struct {
 	error string
@@ -52,10 +50,7 @@ func NewLeaderboardModel() *LeaderboardModel {
 
 // Init initializes the leaderboard model
 func (m LeaderboardModel) Init() tea.Cmd {
-	return tea.Batch(
-		m.loadLeaderboard(),
-		m.loadUserStats(),
-	)
+	return m.loadLeaderboard()
 }
 
 // Update handles messages for the leaderboard
@@ -74,10 +69,7 @@ func (m LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Refresh leaderboard
 			m.loading = true
 			m.error = ""
-			return m, tea.Batch(
-				m.loadLeaderboard(),
-				m.loadUserStats(),
-			)
+			return m, m.loadLeaderboard()
 		case "a":
 			// Show authentication info/help
 			return m, m.showAuthHelp()
@@ -86,12 +78,10 @@ func (m LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case leaderboardLoadedMsg:
 		m.entries = msg.entries
+		m.userEntry = msg.userEntry
 		m.loading = false
 		return m, nil
 
-	case userStatsLoadedMsg:
-		m.userStats = msg.stats
-		return m, nil
 
 	case loadErrorMsg:
 		m.error = msg.error
@@ -122,11 +112,6 @@ func (m LeaderboardModel) View() string {
 	table := m.renderLeaderboardTable()
 	sections = append(sections, table)
 
-	// User stats (if authenticated)
-	if m.userStats != nil {
-		userSection := m.renderUserStats()
-		sections = append(sections, userSection)
-	}
 
 	// Instructions
 	instructions := m.renderInstructions()
@@ -210,8 +195,11 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 	for _, entry := range m.entries {
 		// Highlight current user if authenticated
 		style := lipgloss.NewStyle()
-		if m.userStats != nil && entry.GitHubID == m.userStats.GitHubID {
-			style = style.Foreground(lipgloss.Color("11")).Bold(true)
+		if m.authManager.IsAuthenticated() {
+			user := m.authManager.GetUser()
+			if entry.GitHubID == user.GitHubID {
+				style = style.Foreground(lipgloss.Color("11")).Bold(true)
+			}
 		}
 
 		rank := style.Copy().Inherit(rankStyle).Render(fmt.Sprintf("#%d", entry.Rank))
@@ -241,57 +229,38 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 		rows = append(rows, row)
 	}
 
+	// Add user's entry below top 10 if they're not in it and authenticated
+	if m.userEntry != nil && m.authManager.IsAuthenticated() {
+		// Add separator
+		separator2 := strings.Repeat("─", 60)
+		rows = append(rows, mutedStyle.Render(separator2))
+		
+		// User's entry with highlighting
+		userStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
+		
+		rank := userStyle.Copy().Inherit(rankStyle).Render(fmt.Sprintf("#%d", m.userEntry.Rank))
+		
+		displayName := m.userEntry.Username
+		if len(displayName) > 18 {
+			displayName = displayName[:15] + "..."
+		}
+		name := userStyle.Copy().Inherit(nameStyle).Render(displayName)
+		
+		wpm := userStyle.Copy().Inherit(wpmStyle).Render(fmt.Sprintf("%.0f", m.userEntry.WPM))
+		acc := userStyle.Copy().Inherit(accStyle).Render(fmt.Sprintf("%.1f%%", m.userEntry.Accuracy))
+		date := userStyle.Copy().Inherit(dateStyle).Render(m.userEntry.CreatedAt.Format("Jan 2"))
+		
+		userRow := lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			rank, "  ", name, "  ", wpm, "  ", acc, "  ", date,
+		)
+		
+		rows = append(rows, userRow)
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
-func (m LeaderboardModel) renderUserStats() string {
-	if m.userStats == nil {
-		return ""
-	}
-
-	title := boldStyle.Render("Your Statistics")
-
-	var stats []string
-
-	// Best score
-	bestScore := fmt.Sprintf("Best: %.0f WPM • %.1f%% accuracy", 
-		m.userStats.BestWPM, m.userStats.BestAccuracy)
-	stats = append(stats, bestScore)
-
-	// Rank
-	var rankStr string
-	if m.userStats.Rank > 0 {
-		rankStr = fmt.Sprintf("Global Rank: #%d", m.userStats.Rank)
-		if m.userStats.Rank <= 10 {
-			rankStr = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true).Render(rankStr)
-		}
-	} else {
-		if m.userStats.QualifiedScores == 0 {
-			rankStr = mutedStyle.Render("Not ranked (need 85%+ accuracy)")
-		} else {
-			rankStr = mutedStyle.Render("Not ranked")
-		}
-	}
-	stats = append(stats, rankStr)
-
-	// Test count
-	testInfo := fmt.Sprintf("Tests: %d total • %d qualified", 
-		m.userStats.TotalScores, m.userStats.QualifiedScores)
-	stats = append(stats, mutedStyle.Render(testInfo))
-
-	content := lipgloss.JoinVertical(lipgloss.Left, 
-		title,
-		"",
-		strings.Join(stats, "\n"),
-	)
-
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("8")).
-		Padding(1, 2).
-		MarginTop(2).
-		Render(content)
-}
 
 func (m LeaderboardModel) renderInstructions() string {
 	var instructions []string
@@ -352,29 +321,14 @@ func (m LeaderboardModel) renderError() string {
 // loadLeaderboard loads the leaderboard data
 func (m LeaderboardModel) loadLeaderboard() tea.Cmd {
 	return func() tea.Msg {
-		entries, err := m.client.GetLeaderboard(m.language)
+		response, err := m.client.GetLeaderboard(m.language)
 		if err != nil {
 			return loadErrorMsg{error: fmt.Sprintf("Failed to load leaderboard: %v", err)}
 		}
-		return leaderboardLoadedMsg{entries: entries}
+		return leaderboardLoadedMsg{entries: response.Entries, userEntry: response.UserEntry}
 	}
 }
 
-// loadUserStats loads the user's statistics if authenticated
-func (m LeaderboardModel) loadUserStats() tea.Cmd {
-	return func() tea.Msg {
-		if !m.authManager.IsAuthenticated() {
-			return userStatsLoadedMsg{stats: nil}
-		}
-
-		stats, err := m.client.GetUserRank(m.language)
-		if err != nil {
-			// Don't treat user stats error as fatal
-			return userStatsLoadedMsg{stats: nil}
-		}
-		return userStatsLoadedMsg{stats: stats}
-	}
-}
 
 // showAuthHelp shows authentication help
 func (m LeaderboardModel) showAuthHelp() tea.Cmd {

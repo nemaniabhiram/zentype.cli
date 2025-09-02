@@ -237,14 +237,29 @@ func (c *Client) SubmitScore(stats game.TypingStats, duration int, language stri
 	return &result, nil
 }
 
-// GetLeaderboard fetches the top 10 leaderboard entries
-func (c *Client) GetLeaderboard(language string) ([]LeaderboardEntry, error) {
+// LeaderboardResponse represents the response from the leaderboard API
+type LeaderboardResponse struct {
+	Entries   []LeaderboardEntry `json:"entries"`
+	UserEntry *LeaderboardEntry  `json:"user_entry,omitempty"`
+}
+
+// GetLeaderboard fetches the top 10 leaderboard entries and user's entry if not in top 10
+func (c *Client) GetLeaderboard(language string) (*LeaderboardResponse, error) {
 	if language == "" {
 		language = "english"
 	}
 
-	url := fmt.Sprintf("/leaderboard?language=%s", language)
-	resp, err := c.makeAuthenticatedRequest("GET", url, nil)
+	url := fmt.Sprintf("%s/leaderboard?language=%s", c.baseURL, language)
+	
+	// Use authenticated request if token is available
+	var resp *http.Response
+	var err error
+	if c.token != "" {
+		resp, err = c.makeAuthenticatedRequest("GET", "/leaderboard?language="+language, nil)
+	} else {
+		resp, err = c.httpClient.Get(url)
+	}
+	
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch leaderboard: %w", err)
 	}
@@ -254,12 +269,12 @@ func (c *Client) GetLeaderboard(language string) ([]LeaderboardEntry, error) {
 		return nil, fmt.Errorf("server returned status: %d", resp.StatusCode)
 	}
 
-	var entries []LeaderboardEntry
-	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+	var response LeaderboardResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("failed to decode leaderboard: %w", err)
 	}
 
-	return entries, nil
+	return &response, nil
 }
 
 // GetUserRank gets the current user's ranking and statistics
