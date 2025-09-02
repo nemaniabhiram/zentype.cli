@@ -64,7 +64,7 @@ func (m LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc", "q":
-			return m, tea.Quit
+			return m, tea.Sequence(tea.ClearScreen, tea.Quit)
 		case "r", "f5":
 			// Refresh leaderboard
 			m.loading = true
@@ -275,7 +275,7 @@ func (m LeaderboardModel) renderInstructions() string {
 	}
 
 	instructions = append(instructions, "")
-	instructions = append(instructions, mutedStyle.Render("Press 'r' to refresh • 'q' to quit"))
+	instructions = append(instructions, mutedStyle.Copy().Align(lipgloss.Center).Render("Press 'r' to refresh • 'q' to quit"))
 
 	return lipgloss.JoinVertical(lipgloss.Center, instructions...)
 }
@@ -305,7 +305,7 @@ func (m LeaderboardModel) renderError() string {
 		"",
 		mutedStyle.Render(m.error),
 		"",
-		mutedStyle.Render("Press 'r' to retry • 'q' to quit"),
+		mutedStyle.Copy().Align(lipgloss.Center).Render("Press 'r' to retry • 'q' to quit"),
 	)
 
 	return lipgloss.Place(
