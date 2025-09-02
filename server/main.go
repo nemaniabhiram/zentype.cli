@@ -620,11 +620,14 @@ func (s *APIServer) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get requesting user's GitHub ID to exclude them
-	var requestingUserID int
+	var requestingUserID int = -1 // Default to -1 so it doesn't match any real GitHub ID
 	token := r.Header.Get("Authorization")
 	if token != "" {
 		token = strings.TrimPrefix(token, "Bearer ")
-		s.db.QueryRow(`SELECT github_id FROM users WHERE access_token = $1`, token).Scan(&requestingUserID)
+		err := s.db.QueryRow(`SELECT github_id FROM users WHERE access_token = $1`, token).Scan(&requestingUserID)
+		if err != nil {
+			requestingUserID = -1 // Keep default if token lookup fails
+		}
 	}
 
 	// Get top 10 users (best score per user, ties broken by accuracy)

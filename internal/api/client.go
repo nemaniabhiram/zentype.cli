@@ -243,8 +243,8 @@ func (c *Client) GetLeaderboard(language string) ([]LeaderboardEntry, error) {
 		language = "english"
 	}
 
-	url := fmt.Sprintf("%s/leaderboard?language=%s", c.baseURL, language)
-	resp, err := c.httpClient.Get(url)
+	url := fmt.Sprintf("/leaderboard?language=%s", language)
+	resp, err := c.makeAuthenticatedRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch leaderboard: %w", err)
 	}
