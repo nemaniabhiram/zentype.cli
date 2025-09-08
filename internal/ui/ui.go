@@ -65,6 +65,7 @@ type Model struct {
 	userRank    int
 	submitting  bool
 	submitError string
+	isAuthenticated bool
 }
 
 // tickMsg is a message type used to handle periodic updates in the application
@@ -88,12 +89,16 @@ func NewModel(duration int, language string) *Model {
 	client := api.NewClient()
 	authManager, _ := auth.NewManager(client)
 	
+	// Cache authentication status to avoid HTTP requests during rendering
+	isAuthenticated := authManager.IsAuthenticated()
+	
 	return &Model{
-		game:        game.NewTypingGame(duration),
-		duration:    duration,
-		language:    language,
-		client:      client,
-		authManager: authManager,
+		game:            game.NewTypingGame(duration),
+		duration:        duration,
+		language:        language,
+		client:          client,
+		authManager:     authManager,
+		isAuthenticated: isAuthenticated,
 	}
 }
 
@@ -188,7 +193,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.showResults = true
 				
 				// Submit score if authenticated and 60-second test
-				if m.authManager.IsAuthenticated() && m.duration == 60 && !m.submitting {
+				if m.isAuthenticated && m.duration == 60 && !m.submitting {
 					m.submitting = true
 					return m, m.submitScore()
 				}
@@ -400,7 +405,7 @@ func (m Model) renderResults() string {
 				mutedStyle.Render("rank"),
 				lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("error"),
 			)
-		} else if !m.authManager.IsAuthenticated() {
+		} else if !m.isAuthenticated {
 			rankSection = lipgloss.JoinVertical(
 				lipgloss.Right,
 				mutedStyle.Render("rank"),

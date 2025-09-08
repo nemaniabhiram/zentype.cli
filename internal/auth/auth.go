@@ -166,9 +166,10 @@ func (m *Manager) isSessionValid() bool {
 		return false
 	}
 
-	// Verify with the server (this could be cached for performance)
-	_, err := m.client.VerifyToken()
-	return err == nil
+	// For performance, we don't verify with the server on every check
+	// The token will be verified when actually used for API calls
+	// This avoids expensive HTTP requests during UI rendering
+	return true
 }
 
 // RefreshUserInfo updates the user information from the server

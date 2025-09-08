@@ -22,6 +22,8 @@ type LeaderboardModel struct {
 	loading     bool
 	error       string
 	language    string
+	isAuthenticated bool
+	user         *auth.Session
 }
 
 // Message types for async operations
@@ -30,7 +32,6 @@ type leaderboardLoadedMsg struct {
 	userEntry *api.LeaderboardEntry
 }
 
-
 type loadErrorMsg struct {
 	error string
 }
@@ -38,13 +39,30 @@ type loadErrorMsg struct {
 // NewLeaderboardModel creates a new leaderboard model
 func NewLeaderboardModel() *LeaderboardModel {
 	client := api.NewClient()
-	authManager, _ := auth.NewManager(client)
+	authManager, err := auth.NewManager(client)
+	if err != nil {
+		// If auth manager creation fails, we'll handle it gracefully
+		// by treating the user as unauthenticated
+		authManager = nil
+	}
+
+	// Cache authentication status to avoid multiple HTTP requests during rendering
+	var isAuthenticated bool
+	var user *auth.Session
+	if authManager != nil {
+		isAuthenticated = authManager.IsAuthenticated()
+		if isAuthenticated {
+			user = authManager.GetUser()
+		}
+	}
 
 	return &LeaderboardModel{
-		client:      client,
-		authManager: authManager,
-		loading:     true,
-		language:    "english",
+		client:          client,
+		authManager:     authManager,
+		loading:         true,
+		language:        "english",
+		isAuthenticated: isAuthenticated,
+		user:            user,
 	}
 }
 
@@ -194,9 +212,8 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 	for _, entry := range m.entries {
 		// Highlight current user if authenticated
 		style := lipgloss.NewStyle()
-		if m.authManager.IsAuthenticated() {
-			user := m.authManager.GetUser()
-			if entry.GitHubID == user.GitHubID {
+		if m.isAuthenticated && m.user != nil {
+			if entry.GitHubID == m.user.GitHubID {
 				style = style.Foreground(lipgloss.Color("11")).Bold(true)
 			}
 		}
@@ -214,11 +231,7 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 		acc := style.Copy().Inherit(accStyle).Render(fmt.Sprintf("%.1f%%", entry.Accuracy))
 		
 		// Format date
-		dateStr := entry.CreatedAt.Format("Jan 02")
-		if entry.CreatedAt.Year() != time.Now().Year() {
-			dateStr = entry.CreatedAt.Format("Jan 2006")
-		}
-		date := style.Copy().Inherit(dateStyle).Render(dateStr)
+		date := style.Copy().Inherit(dateStyle).Render(formatDate(entry.CreatedAt))
 
 		row := lipgloss.JoinHorizontal(
 			lipgloss.Top,
@@ -229,7 +242,7 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 	}
 
 	// Add user's entry below top 10 if they're not in it and authenticated
-	if m.userEntry != nil && m.authManager.IsAuthenticated() {
+	if m.userEntry != nil && m.isAuthenticated && m.user != nil {
 		// Add separator
 		separator2 := strings.Repeat("─", 60)
 		rows = append(rows, mutedStyle.Render(separator2))
@@ -247,7 +260,7 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 		
 		wpm := userStyle.Copy().Inherit(wpmStyle).Render(fmt.Sprintf("%.0f", m.userEntry.WPM))
 		acc := userStyle.Copy().Inherit(accStyle).Render(fmt.Sprintf("%.1f%%", m.userEntry.Accuracy))
-		date := userStyle.Copy().Inherit(dateStyle).Render(m.userEntry.CreatedAt.Format("Jan 2"))
+		date := userStyle.Copy().Inherit(dateStyle).Render(formatDate(m.userEntry.CreatedAt))
 		
 		userRow := lipgloss.JoinHorizontal(
 			lipgloss.Top,
@@ -260,13 +273,20 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
+// formatDate formats a date consistently for display
+func formatDate(date time.Time) string {
+	if date.Year() != time.Now().Year() {
+		return date.Format("Jan 2006")
+	}
+	return date.Format("Jan 02")
+}
+
 
 func (m LeaderboardModel) renderInstructions() string {
 	var instructions []string
 
-	if m.authManager.IsAuthenticated() {
-		user := m.authManager.GetUser()
-		welcomeMsg := fmt.Sprintf("Logged in as %s", user.Username)
+	if m.isAuthenticated && m.user != nil {
+		welcomeMsg := fmt.Sprintf("Logged in as %s", m.user.Username)
 		instructions = append(instructions, 
 			lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("✓ " + welcomeMsg))
 	} else {
@@ -322,6 +342,11 @@ func (m LeaderboardModel) renderError() string {
 // loadLeaderboard loads the leaderboard data
 func (m LeaderboardModel) loadLeaderboard() tea.Cmd {
 	return func() tea.Msg {
+		// Ensure we have a valid client
+		if m.client == nil {
+			return loadErrorMsg{error: "API client not initialized"}
+		}
+		
 		response, err := m.client.GetLeaderboard(m.language)
 		if err != nil {
 			return loadErrorMsg{error: fmt.Sprintf("Failed to load leaderboard: %v", err)}
