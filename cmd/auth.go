@@ -154,20 +154,42 @@ func runAuth(cmd *cobra.Command, args []string) error {
 }
 
 func openBrowser(url string) error {
-	var cmd string
-	var args []string
-
 	switch runtime.GOOS {
 	case "windows":
-		cmd = "cmd"
-		args = []string{"/c", "start", "", url}
+		return openBrowserWindows(url)
 	case "darwin":
-		cmd = "open"
-		args = []string{url}
+		return exec.Command("open", url).Start()
 	default: // Linux and others
-		cmd = "xdg-open"
-		args = []string{url}
+		return exec.Command("xdg-open", url).Start()
 	}
+}
 
-	return exec.Command(cmd, args...).Start()
+// openBrowserWindows tries multiple methods to open a URL on Windows
+func openBrowserWindows(url string) error {
+	var lastErr error
+	
+	// Method 1: Try rundll32 first (handles long URLs better)
+	if err := exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start(); err == nil {
+		return nil
+	} else {
+		lastErr = err
+	}
+	
+	// Method 2: Try PowerShell (handles long URLs well)
+	psCmd := fmt.Sprintf("Start-Process '%s'", url)
+	if err := exec.Command("powershell", "-Command", psCmd).Start(); err == nil {
+		return nil
+	} else {
+		lastErr = err
+	}
+	
+	// Method 3: Try cmd /c start (may truncate long URLs)
+	if err := exec.Command("cmd", "/c", "start", url).Start(); err == nil {
+		return nil
+	} else {
+		lastErr = err
+	}
+	
+	// If all methods fail, return the last error
+	return fmt.Errorf("all Windows browser opening methods failed, last error: %w", lastErr)
 }
