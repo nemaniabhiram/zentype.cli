@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	version     = "v1.0.0"
+	version     = "v0.1.3"
 	showLeaderboard bool
 	showVersion bool
 	duration    int // Duration for direct typing test
