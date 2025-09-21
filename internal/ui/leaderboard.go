@@ -183,10 +183,6 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 		Width(8).
 		Align(lipgloss.Right)
 
-	dateStyle := lipgloss.NewStyle().
-		Width(12).
-		Align(lipgloss.Center)
-
 	// Header row
 	headerRow := lipgloss.JoinHorizontal(
 		lipgloss.Top,
@@ -197,12 +193,10 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 		headerStyle.Copy().Inherit(wpmStyle).Render("WPM"),
 		"  ",
 		headerStyle.Copy().Inherit(accStyle).Render("Accuracy"),
-		"  ",
-		headerStyle.Copy().Inherit(dateStyle).Render("Date"),
 	)
 
 	// Separator
-	separator := strings.Repeat("─", 60)
+	separator := strings.Repeat("─", 48)
 
 	var rows []string
 	rows = append(rows, headerRow)
@@ -229,13 +223,10 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 		
 		wpm := style.Copy().Inherit(wpmStyle).Render(fmt.Sprintf("%.0f", entry.WPM))
 		acc := style.Copy().Inherit(accStyle).Render(fmt.Sprintf("%.1f%%", entry.Accuracy))
-		
-		// Format date
-		date := style.Copy().Inherit(dateStyle).Render(formatDate(entry.CreatedAt))
 
 		row := lipgloss.JoinHorizontal(
 			lipgloss.Top,
-			rank, "  ", name, "  ", wpm, "  ", acc, "  ", date,
+			rank, "  ", name, "  ", wpm, "  ", acc,
 		)
 
 		rows = append(rows, row)
@@ -244,7 +235,7 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 	// Add user's entry below top 10 if they're not in it and authenticated
 	if m.userEntry != nil && m.isAuthenticated && m.user != nil {
 		// Add separator
-		separator2 := strings.Repeat("─", 60)
+		separator2 := strings.Repeat("─", 48)
 		rows = append(rows, mutedStyle.Render(separator2))
 		
 		// User's entry with highlighting
@@ -260,11 +251,10 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 		
 		wpm := userStyle.Copy().Inherit(wpmStyle).Render(fmt.Sprintf("%.0f", m.userEntry.WPM))
 		acc := userStyle.Copy().Inherit(accStyle).Render(fmt.Sprintf("%.1f%%", m.userEntry.Accuracy))
-		date := userStyle.Copy().Inherit(dateStyle).Render(formatDate(m.userEntry.CreatedAt))
 		
 		userRow := lipgloss.JoinHorizontal(
 			lipgloss.Top,
-			rank, "  ", name, "  ", wpm, "  ", acc, "  ", date,
+			rank, "  ", name, "  ", wpm, "  ", acc,
 		)
 		
 		rows = append(rows, userRow)
@@ -273,13 +263,6 @@ func (m LeaderboardModel) renderLeaderboardTable() string {
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
-// formatDate formats a date consistently for display
-func formatDate(date time.Time) string {
-	if date.Year() != time.Now().Year() {
-		return date.Format("Jan 2006")
-	}
-	return date.Format("Jan 02")
-}
 
 
 func (m LeaderboardModel) renderInstructions() string {
